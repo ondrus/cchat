@@ -7,7 +7,7 @@
 
 %% Produce initial state
 initial_state(Nick, GUIName) ->
-    #client_st { gui = GUIName }.
+    #client_st { nick = list_to_atom(Nick), gui = GUIName, server = null, channels = [] }.
 
 %% ---------------------------------------------------------------------------
 
@@ -20,43 +20,88 @@ initial_state(Nick, GUIName) ->
 
 %% Connect to server
 handle(St, {connect, Server}) ->
-    Data = "hello?",
-    io:fwrite("Client is sending: ~p~n", [Data]),
-    ServerAtom = list_to_atom(Server),
-    Response = genserver:request(ServerAtom, Data),
-    io:fwrite("Client received: ~p~n", [Response]),
-    % {reply, ok, St} ;
-    {reply, {error, not_implemented, "Not implemented"}, St} ;
+    if 
+        St#client_st.server /= null ->
+            {reply, {error, user_already_connected, "You're already connected to a server"}, St} ;
+        true ->
+            %add us to the server!
+            ServerAtom = list_to_atom(Server),
+            Data = {connect, St#client_st.nick},
+            Response = genserver:request(ServerAtom, Data),
+            NewState = St#client_st { server = ServerAtom },
+            {reply, Response, NewState}
+    end;
 
 %% Disconnect from server
 handle(St, disconnect) ->
-    % {reply, ok, St} ;
-    {reply, {error, not_implemented, "Not implemented"}, St} ;
+    if 
+        St#client_st.server == null ->
+            {reply, {error, user_not_connected, "You're not connected to a server"}, St} ;
+        St#client_st.channels /= [] ->
+            {reply, {error, leave_channels_first, "Leave all the channels!"}, St} ;
+        true ->
+            Data = {disconnect, St#client_st.nick},
+            Response = genserver:request(St#client_st.server, Data),
+            NewState = St#client_st { server = null },
+            {reply, Response, NewState}
+    end;
 
 % Join channel
 handle(St, {join, Channel}) ->
-    % {reply, ok, St} ;
-    {reply, {error, not_implemented, "Not implemented"}, St} ;
+    %check if connected!
+    ChannelAtom = list_to_atom(Channel),
+    IsMember = lists:member(ChannelAtom, St#client_st.channels),
+    if
+        St#client_st.server == null ->
+            {reply, {error, user_not_connected, "You're not connected to a server"}, St} ;
+        IsMember ->
+            {reply, {error, user_already_joined, "You're already in this channel"}, St} ;
+        true ->
+            Data = {join, ChannelAtom},
+            genserver:request(St#client_st.server, Data),
+            NewState = St#client_st {channels = [ChannelAtom|St#client_st.channels]},
+            {reply, ok, NewState}
+    end;
 
 %% Leave channel
 handle(St, {leave, Channel}) ->
-    % {reply, ok, St} ;
-    {reply, {error, not_implemented, "Not implemented"}, St} ;
+    ChannelAtom = list_to_atom(Channel),
+    IsMember = lists:member(ChannelAtom, St#client_st.channels),
+    if
+        IsMember ->
+            NewState = St#client_st { channels = lists:delete(ChannelAtom, St#client_st.channels) },
+            {reply, ok, NewState};
+        true ->
+            {reply, {error, user_not_joined, "You're not in the channel"}, St}
+    end;
 
 % Sending messages
 handle(St, {msg_from_GUI, Channel, Msg}) ->
-    % {reply, ok, St} ;
-    {reply, {error, not_implemented, "Not implemented"}, St} ;
+    ChannelAtom = list_to_atom(Channel),
+    IsMember = lists:member(ChannelAtom, St#client_st.channels),
+    if
+        IsMember ->
+            Data = {msg_from_client, Channel, St#client_st.nick, Msg},
+            genserver:request(St#client_st.server, Data);
+        true ->
+            {reply, {error, user_not_joined, "You're not in the channel"}, St}
+    end;
 
 %% Get current nick
 handle(St, whoami) ->
-    % {reply, "nick", St} ;
-    {reply, {error, not_implemented, "Not implemented"}, St} ;
+    Nick = atom_to_list(St#client_st.nick),
+    {reply, Nick, St} ;
 
 %% Change nick
 handle(St, {nick, Nick}) ->
-    % {reply, ok, St} ;
-    {reply, {error, not_implemented, "Not implemented"}, St} ;
+    if 
+        St#client_st.server /= null -> 
+            {reply, {error, user_already_connected, "Can't change nick while connected"}, St} ;
+        true ->
+            NickAtom = list_to_atom(Nick),
+            NewSt = St#client_st { nick = NickAtom },
+            {reply, ok, NewSt}
+    end;
 
 %% Incoming message
 handle(St = #client_st { gui = GUIName }, {incoming_msg, Channel, Name, Msg}) ->
