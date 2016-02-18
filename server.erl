@@ -7,7 +7,7 @@
 
 % Produce initial state
 initial_state(ServerName) ->
-    #server_st{ name = ServerName, users = [], channels = maps:new().
+    #server_st{ name = ServerName, users = [], channels = maps:new()}
 
 %% ---------------------------------------------------------------------------
 
@@ -19,10 +19,10 @@ initial_state(ServerName) ->
 %% and NewState is the new state of the server.
 
 handle(St, {connect, Nick}) ->
-	Is_member = lists:member(Nick, St#server_st.users),
+	Is_Member = lists:member(Nick, St#server_st.users),
 	%io:fwrite("Server received: ~p~n", Is_member),
 	if
-		Is_member ->
+		Is_Member ->
 			Response = {error, user_already_connected, "You're already connected"},
 			{reply, Response, St} ;
 		true ->
@@ -43,16 +43,17 @@ handle(St, {disconnect, Nick}) ->
 %
 % Join channel
 %
-%
+% NEED TO CHECK THAT NO ONE TRIES TO JOIN THE SAME CHANNEL WHILE SOMEONE CREATES IT
 handle(St, {join, Channel, Ref}) ->
-	ChannelExists = lists:member(Channel, St#server_st.channels),
-	if
-		ChannelExists ->
-			{reply, ok, St};
-		true ->
-			NewState = St#server_st { channels = [Channel|St#server_st.channels] },
-			{reply, ok, NewState}	
-	end;
+	Channels = St#server_st.channels,
+	case maps:find(Channel, Channels) of
+		{ok, Members} ->
+			NewMembers = [Ref|Members],
+		error ->
+			NewMembers = [Ref],
+	end
+	NewState = St#server_st {channels = maps:put(Channel, NewMembers, Channels)},
+	{reply, ok, NewState};
 
 
 handle(St, {msg_from_client, Channel, Nick, Msg}) ->
