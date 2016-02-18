@@ -44,22 +44,42 @@ handle(St, {disconnect, Nick}) ->
 % Join channel
 %
 % NEED TO CHECK THAT NO ONE TRIES TO JOIN THE SAME CHANNEL WHILE SOMEONE CREATES IT
-handle(St, {join, Channel, Ref}) ->
+handle(St, {join, Channel, Pid}) ->
 	Channels = St#server_st.channels,
 	case maps:find(Channel, Channels) of
 		{ok, Members} ->
-			NewMembers = [Ref|Members],
+			NewMembers = [Pid|Members],
 		error ->
-			NewMembers = [Ref],
+			NewMembers = [Pid],
+	end
+	NewState = St#server_st {channels = maps:put(Channel, NewMembers, Channels)},
+	{reply, ok, NewState};
+
+%
+% Leave channel
+%
+% NEED TO CHECK THAT NO ONE TRIES TO LEAVE BEFORE JOINED
+handle(St, {leave, Channel, Pid}) ->
+	Channels = St#server_st.channels,
+	case maps:find(Channel, Channels) of
+		{ok, Members} ->
+			NewMembers = lists:delete(Pid, Members),
+		error ->
+			NewMembers = Members,
 	end
 	NewState = St#server_st {channels = maps:put(Channel, NewMembers, Channels)},
 	{reply, ok, NewState};
 
 
-handle(St, {msg_from_client, Channel, Nick, Msg}) ->
-	genserver:request(St, {incoming_msg, Channel, Nick, Msg});
-	%NewState = St#server_st { users = lists:delete(Nick, St#server_st.users) },
-	%{reply, ok, NewState};
+handle(St, {msg_from_client, Channel, Nick, Msg, Pid}) ->
+	% Fold of all Pids from channel as St and then send the messages to them
+	Channels = St#server_st.channels,
+	Send_msg = fun(Reciever -> genserver:request(Reciever, {incoming_msg, Channel, Nick, Msg})),
+	case maps:find(Channel, Channels) of
+		{ok, Members} -> 
+			foreach(Send_msg, lists:delete(Pid, Members)),
+		error -> 
+	{reply, ok, St};
 
 handle(St, Request) ->
    io:fwrite("Server received: ~p~n", [Request]),

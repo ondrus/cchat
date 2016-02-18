@@ -7,7 +7,7 @@
 
 %% Produce initial state
 initial_state(Nick, GUIName) ->
-    #client_st { nick = list_to_atom(Nick), gui = GUIName, server = null, channels = [] }.
+    #client_st { nick = list_to_atom(Nick), gui = GUIName, server = null, channels = []}.
 
 %% ---------------------------------------------------------------------------
 
@@ -57,7 +57,7 @@ handle(St, {join, Channel}) ->
         IsMember ->
             {reply, {error, user_already_joined, "You're already in this channel"}, St} ;
         true ->
-            Data = {join, ChannelAtom},
+            Data = {join, ChannelAtom, self()},
             genserver:request(St#client_st.server, Data),
             NewState = St#client_st {channels = [ChannelAtom|St#client_st.channels]},
             {reply, ok, NewState}
@@ -69,6 +69,8 @@ handle(St, {leave, Channel}) ->
     IsMember = lists:member(ChannelAtom, St#client_st.channels),
     if
         IsMember ->
+            Data = {leave, ChannelAtom, self()}
+            genserver:request(St#client_st.server, Data),
             NewState = St#client_st { channels = lists:delete(ChannelAtom, St#client_st.channels) },
             {reply, ok, NewState};
         true ->
@@ -81,9 +83,10 @@ handle(St, {msg_from_GUI, Channel, Msg}) ->
     IsMember = lists:member(ChannelAtom, St#client_st.channels),
     if
         IsMember ->
-            Data = {msg_from_client, Channel, St#client_st.nick, Msg},
+            Data = {msg_from_client, Channel, St#client_st.nick, Msg, self()},
             genserver:request(St#client_st.server, Data);
         true ->
+            % Perhaps take care of this on server side
             {reply, {error, user_not_joined, "You're not in the channel"}, St}
     end;
 
