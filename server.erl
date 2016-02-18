@@ -7,7 +7,7 @@
 
 % Produce initial state
 initial_state(ServerName) ->
-    #server_st{ name = ServerName, users = [], channels = maps:new()}
+    #server_st{ name = ServerName, users = [], channels = maps:new()}.
 
 %% ---------------------------------------------------------------------------
 
@@ -17,7 +17,6 @@ initial_state(ServerName) ->
 %% current state), performing the needed actions, and returning a tuple
 %% {reply, Reply, NewState}, where Reply is the reply to be sent to the client
 %% and NewState is the new state of the server.
-
 handle(St, {connect, Nick}) ->
 	Is_Member = lists:member(Nick, St#server_st.users),
 	%io:fwrite("Server received: ~p~n", Is_member),
@@ -48,10 +47,10 @@ handle(St, {join, Channel, Pid}) ->
 	Channels = St#server_st.channels,
 	case maps:find(Channel, Channels) of
 		{ok, Members} ->
-			NewMembers = [Pid|Members],
+			NewMembers = [Pid|Members];
 		error ->
-			NewMembers = [Pid],
-	end
+			NewMembers = [Pid]
+	end,
 	NewState = St#server_st {channels = maps:put(Channel, NewMembers, Channels)},
 	{reply, ok, NewState};
 
@@ -64,22 +63,26 @@ handle(St, {leave, Channel, Pid}) ->
 	case maps:find(Channel, Channels) of
 		{ok, Members} ->
 			NewMembers = lists:delete(Pid, Members),
+			NewState = St#server_st {channels = maps:put(Channel, NewMembers, Channels)},
+			{reply, ok, NewState};
 		error ->
-			NewMembers = Members,
-	end
-	NewState = St#server_st {channels = maps:put(Channel, NewMembers, Channels)},
-	{reply, ok, NewState};
-
+			{reply, {error, user_not_joined, "You're not in the channel"}, St}
+	end;
 
 handle(St, {msg_from_client, Channel, Nick, Msg, Pid}) ->
 	% Fold of all Pids from channel as St and then send the messages to them
 	Channels = St#server_st.channels,
-	Send_msg = fun(Reciever -> genserver:request(Reciever, {incoming_msg, Channel, Nick, Msg})),
 	case maps:find(Channel, Channels) of
-		{ok, Members} -> 
-			foreach(Send_msg, lists:delete(Pid, Members)),
-		error -> 
-	{reply, ok, St};
+		{ok, Members} ->
+			Pids = lists:delete(Pid, Members),	
+			lists:foreach(fun(P) ->
+							genserver:request(P, {incoming_msg, atom_to_list(Channel), Nick, Msg})
+						  end, Pids),
+			{reply, ok, St};
+		error ->
+			{reply, {error, user_not_joined, "You're not in the channel"}, St}
+	end;
+	
 
 handle(St, Request) ->
    io:fwrite("Server received: ~p~n", [Request]),

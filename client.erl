@@ -17,7 +17,6 @@ initial_state(Nick, GUIName) ->
 %% current state), performing the needed actions, and returning a tuple
 %% {reply, Reply, NewState}, where Reply is the reply to be sent to the
 %% requesting process and NewState is the new state of the client.
-
 %% Connect to server
 handle(St, {connect, Server}) ->
     if 
@@ -69,7 +68,7 @@ handle(St, {leave, Channel}) ->
     IsMember = lists:member(ChannelAtom, St#client_st.channels),
     if
         IsMember ->
-            Data = {leave, ChannelAtom, self()}
+            Data = {leave, ChannelAtom, self()},
             genserver:request(St#client_st.server, Data),
             NewState = St#client_st { channels = lists:delete(ChannelAtom, St#client_st.channels) },
             {reply, ok, NewState};
@@ -85,9 +84,10 @@ handle(St, {msg_from_GUI, Channel, Msg}) ->
         IsMember ->
             Data = {msg_from_client, Channel, St#client_st.nick, Msg, self()},
             genserver:request(St#client_st.server, Data);
+            {reply, ok, St};
         true ->
             % Perhaps take care of this on server side
-            {reply, {error, user_not_joined, "You're not in the channel"}, St}
+            {reply, {error, user_not_joined, "client: You're not in the channel"}, St}
     end;
 
 %% Get current nick
