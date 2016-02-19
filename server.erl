@@ -74,13 +74,13 @@ handle(St, {msg_from_client, Channel, Nick, Msg, Pid}) ->
 	Channels = St#server_st.channels,
 	case maps:find(Channel, Channels) of
 		{ok, Members} ->
-			Pids = lists:delete(Pid, Members),	
+			%Pids = lists:delete(Pid, Members),	
 			lists:foreach(fun(P) ->
-							genserver:request(P, {incoming_msg, atom_to_list(Channel), Nick, Msg})
-						  end, Pids),
+							genserver:request(P, {incoming_msg, atom_to_list(Channel), atom_to_list(Nick), Msg}, 500)
+						  end, Members),
 			{reply, ok, St};
 		error ->
-			{reply, {error, user_not_joined, "You're not in the channel"}, St}
+			{reply, {error, user_not_joined, " BASJ: You're not in the channel"}, St}
 	end;
 	
 

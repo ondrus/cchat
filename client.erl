@@ -82,7 +82,7 @@ handle(St, {msg_from_GUI, Channel, Msg}) ->
     IsMember = lists:member(ChannelAtom, St#client_st.channels),
     if
         IsMember ->
-            Data = {msg_from_client, Channel, St#client_st.nick, Msg, self()},
+            Data = {msg_from_client, ChannelAtom, St#client_st.nick, Msg, self()},
             genserver:request(St#client_st.server, Data);
             {reply, ok, St};
         true ->
