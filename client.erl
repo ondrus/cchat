@@ -20,15 +20,17 @@ initial_state(Nick, GUIName) ->
 %% Connect to server
 handle(St, {connect, Server}) ->
     if 
-        St#client_st.server /= null ->
-            {reply, {error, user_already_connected, "You're already connected to a server"}, St} ;
-        true ->
+        St#client_st.server == null ->
             %add us to the server!
             ServerAtom = list_to_atom(Server),
             Data = {connect, St#client_st.nick},
             Response = genserver:request(ServerAtom, Data),
+            % case over Response and catch {'EXIT', reason} send server_not_reached to GUI.
             NewState = St#client_st { server = ServerAtom },
-            {reply, Response, NewState}
+            {reply, Response, NewState};
+        true -> % probably not needed on client side?
+             {reply, {error, user_already_connected, "You're already connected to a server"}, St}
+            
     end;
 
 %% Disconnect from server
@@ -83,8 +85,8 @@ handle(St, {msg_from_GUI, Channel, Msg}) ->
     if
         IsMember ->
             Data = {msg_from_client, ChannelAtom, St#client_st.nick, Msg, self()},
-            genserver:request(St#client_st.server, Data);
-            {reply, ok, St};
+            Response = genserver:request(St#client_st.server, Data),
+            {reply, Response, St};
         true ->
             % Perhaps take care of this on server side
             {reply, {error, user_not_joined, "client: You're not in the channel"}, St}
