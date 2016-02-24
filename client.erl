@@ -24,13 +24,18 @@ handle(St, {connect, Server}) ->
             %add us to the server!
             ServerAtom = list_to_atom(Server),
             Data = {connect, St#client_st.nick},
-            Response = genserver:request(ServerAtom, Data),
-            % case over Response and catch {'EXIT', reason} send server_not_reached to GUI.
-            NewState = St#client_st { server = ServerAtom },
-            {reply, Response, NewState};
+            try genserver:request(ServerAtom, Data) of
+                {ok, Connection} ->
+                    NewSt = St#client_st {server = Connection},
+                    {reply, ok, NewSt};
+                {error, user_already_connected, Msg} ->
+                    {reply, {error, user_already_connected, Msg}, St}
+            catch
+                _:_ ->
+                    {reply, {error, server_not_reached, "couldn't connect to server"}, St}
+            end;
         true -> % probably not needed on client side?
              {reply, {error, user_already_connected, "You're already connected to a server"}, St}
-            
     end;
 
 %% Disconnect from server
@@ -60,8 +65,7 @@ handle(St, {join, Channel}) ->
         true ->
             Data = {join, ChannelAtom, self()},
             genserver:request(St#client_st.server, Data),
-            NewState = St#client_st {channels = [ChannelAtom|St#client_st.channels]},
-            {reply, ok, NewState}
+            NewState = St#client_st {channels = [ChannelAtom|St#client_st.channels]}
     end;
 
 %% Leave channel

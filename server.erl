@@ -22,11 +22,12 @@ handle(St, {connect, Nick}) ->
 	%io:fwrite("Server received: ~p~n", Is_member),
 	if
 		Is_Member ->
-			Response = {error, user_already_connected, "You're already connected"},
-			{reply, Response, St} ;
+			Response = {error, user_already_connected, "Nick occupied by other user"},
+			{reply, Response, St};
 		true ->
-            NewSt = St#server_st { users = [Nick|St#server_st.users] },
-            {reply, ok, NewSt}
+            NewSt = St#server_st {users = [Nick|St#server_st.users]},
+            io:fwrite("Server is sending: ~p~n", [self()]),
+            {reply, {ok, self()}, NewSt}
         % Atom server_not_reached is returned when 
         % the server process cannot be reached for any reason.
 	end;
