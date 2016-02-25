@@ -72,7 +72,7 @@ handle(St, {join, Channel}) ->
                     NewState = St#client_st {channels = [ChannelAtom|St#client_st.channels]},
                     {reply, ok, NewState};
                 {error, user_already_joined, Msg} ->
-                    {reply, user_already_joined, Msg}
+                    {reply, {error, user_already_joined, Msg}, St}
             catch
                 _:_ ->
                   {reply, {error, server_not_reached, "couldn't connect to server"}, St}
