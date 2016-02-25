@@ -7,7 +7,7 @@
 
 % Produce initial state
 initial_state(ServerName) ->
-    #server_st{ name = ServerName, users = [], channels = maps:new()}.
+    #server_st{ name = ServerName, users = maps:new(), channels = maps:new()}.
 
 %% ---------------------------------------------------------------------------
 
@@ -17,15 +17,15 @@ initial_state(ServerName) ->
 %% current state), performing the needed actions, and returning a tuple
 %% {reply, Reply, NewState}, where Reply is the reply to be sent to the client
 %% and NewState is the new state of the server.
-handle(St, {connect, Nick}) ->
-	Is_Member = lists:member(Nick, St#server_st.users),
+handle(St, {connect, Nick, Pid}) ->
+	Is_Member = maps:is_key(Nick, St#server_st.users),
 	%io:fwrite("Server received: ~p~n", Is_member),
 	if
 		Is_Member ->
 			Response = {error, user_already_connected, "Nick occupied by other user"},
 			{reply, Response, St};
 		true ->
-            NewSt = St#server_st {users = [Nick|St#server_st.users]},
+            NewSt = St#server_st {users = maps:put(Nick, Pid, St#server_st.users)},
             io:fwrite("Server is sending: ~p~n", [self()]),
             {reply, {ok, self()}, NewSt}
         % Atom server_not_reached is returned when 
@@ -37,24 +37,30 @@ handle(St, {connect, Nick}) ->
 %
 %
 handle(St, {disconnect, Nick}) ->
-	NewState = St#server_st { users = lists:delete(Nick, St#server_st.users) },
+	NewState = St#server_st {users = maps:remove(Nick, St#server_st.users)},
 	{reply, ok, NewState};
 
 %
 % Join channel
 %
 % NEED TO CHECK THAT NO ONE TRIES TO JOIN THE SAME CHANNEL WHILE SOMEONE CREATES IT
-handle(St, {join, Channel, Pid}) ->
+handle(St, {join, Channel, Nick}) ->
 	Channels = St#server_st.channels,
 	case maps:find(Channel, Channels) of
 		{ok, Members} ->
-			NewMembers = [Pid|Members];
+			IsMember = lists:member(maps:get(Nick,St#server_st.users),Members),
+			if 
+				IsMember ->
+					NewMembers = Members,
+					{reply, {error, user_already_joined, "You're already in this channel"}, St};
+				true ->
+					NewMembers = [maps:get(Nick,St#server_st.users)|Members]
+			end;
 		error ->
-			NewMembers = [Pid]
+			NewMembers = [maps:get(Nick,St#server_st.users)]
 	end,
 	NewState = St#server_st {channels = maps:put(Channel, NewMembers, Channels)},
 	{reply, ok, NewState};
-
 %
 % Leave channel
 %
@@ -70,12 +76,12 @@ handle(St, {leave, Channel, Pid}) ->
 			{reply, {error, user_not_joined, "You're not in the channel"}, St}
 	end;
 
-handle(St, {msg_from_client, Channel, Nick, Msg, Pid}) ->
+handle(St, {msg_from_client, Channel, Nick, Msg}) ->
 	% Fold of all Pids from channel as St and then send the messages to them
 	Channels = St#server_st.channels,
 	case maps:find(Channel, Channels) of
 		{ok, Members} ->
-			Pids = lists:delete(Pid, Members),	
+			Pids = lists:delete(maps:get(Nick, St#server_st.users), Members),	
 			Response = lists:map(fun(P) ->
 							genserver:request(P, {incoming_msg, atom_to_list(Channel), atom_to_list(Nick), Msg})
 						  end, Pids),
@@ -83,14 +89,11 @@ handle(St, {msg_from_client, Channel, Nick, Msg, Pid}) ->
 		error ->
 			{reply, {error, user_not_joined, " BASJ: You're not in the channel"}, St}
 	end;
-	
 
 handle(St, Request) ->
-   io:fwrite("Server received: ~p~n", [Request]),
-   Response = "hi!",
-   io:fwrite("Server is sending: ~p~n", [Response]),
-   {reply, Response, St}.
-    %io:fwrite("Server received: ~p~n", [Request]),
-    %Response = "hi!",
-    %io:fwrite("Server is sending: ~p~n", [Response]),
-    
+	{reply, {error, user_not_joined, "Wierd request to server"}, St}.
+
+
+
+
+

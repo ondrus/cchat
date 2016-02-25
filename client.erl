@@ -23,7 +23,7 @@ handle(St, {connect, Server}) ->
         St#client_st.server == null ->
             %add us to the server!
             ServerAtom = list_to_atom(Server),
-            Data = {connect, St#client_st.nick},
+            Data = {connect, St#client_st.nick, self()},
             try genserver:request(ServerAtom, Data) of
                 {ok, Connection} ->
                     NewSt = St#client_st {server = Connection},
@@ -47,26 +47,36 @@ handle(St, disconnect) ->
             {reply, {error, leave_channels_first, "Leave all the channels!"}, St} ;
         true ->
             Data = {disconnect, St#client_st.nick},
-            Response = genserver:request(St#client_st.server, Data),
-            NewState = St#client_st { server = null },
-            {reply, Response, NewState}
+            try genserver:request(St#client_st.server, Data) of
+                {ok} ->
+                    NewState = St#client_st { server = null },
+                    {reply, ok, NewState}
+            catch
+                _:_ ->
+                    {reply, {error, server_not_reached, "couldn't connect to server"}, St}
+            end
     end;
 
 % Join channel
 handle(St, {join, Channel}) ->
-    %check if connected!
     ChannelAtom = list_to_atom(Channel),
-    IsMember = lists:member(ChannelAtom, St#client_st.channels),
+    %IsMember = lists:member(ChannelAtom, St#client_st.channels),
     if
         St#client_st.server == null ->
             {reply, {error, user_not_connected, "You're not connected to a server"}, St} ;
-        IsMember ->
-            {reply, {error, user_already_joined, "You're already in this channel"}, St} ;
+            %{reply, {error, user_already_joined, "You're already in this channel"}, St} ;
         true ->
-            Data = {join, ChannelAtom, self()},
-            genserver:request(St#client_st.server, Data),
-            NewState = St#client_st {channels = [ChannelAtom|St#client_st.channels]},
-            {reply, ok, NewState}
+            Data = {join, ChannelAtom, St#client_st.nick},
+            try genserver:request(St#client_st.server, Data) of
+                {ok} ->
+                    NewState = St#client_st {channels = [ChannelAtom|St#client_st.channels]},
+                    {reply, ok, NewState};
+                {error, user_already_joined, Msg} ->
+                    {reply, user_already_joined, Msg}
+            catch
+                _:_ ->
+                  {reply, {error, server_not_reached, "couldn't connect to server"}, St}
+            end
     end;
 
 %% Leave channel
@@ -89,7 +99,7 @@ handle(St, {msg_from_GUI, Channel, Msg}) ->
     IsMember = lists:member(ChannelAtom, St#client_st.channels),
     if
         IsMember ->
-            Data = {msg_from_client, ChannelAtom, St#client_st.nick, Msg, self()},
+            Data = {msg_from_client, ChannelAtom, St#client_st.nick, Msg},
             Response = genserver:request(St#client_st.server, Data),
             {reply, Response, St};
         true ->
