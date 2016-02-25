@@ -47,8 +47,9 @@ handle(St, disconnect) ->
             {reply, {error, leave_channels_first, "Leave all the channels!"}, St} ;
         true ->
             Data = {disconnect, St#client_st.nick},
-            try genserver:request(St#client_st.server, Data) of
-                {ok} ->
+            ServerAtom = St#client_st.server,
+            try genserver:request(ServerAtom, Data) of
+                ok ->
                     NewState = St#client_st { server = null },
                     {reply, ok, NewState}
             catch
@@ -68,11 +69,11 @@ handle(St, {join, Channel}) ->
         true ->
             Data = {join, ChannelAtom, St#client_st.nick},
             try genserver:request(St#client_st.server, Data) of
-                {ok} ->
+                ok ->
                     NewState = St#client_st {channels = [ChannelAtom|St#client_st.channels]},
                     {reply, ok, NewState};
                 {error, user_already_joined, Msg} ->
-                    {reply, {error, user_already_joined, Msg}, St}
+                    {reply, {error, user_already_joined, [Msg]}, St}
             catch
                 _:_ ->
                   {reply, {error, server_not_reached, "couldn't connect to server"}, St}
