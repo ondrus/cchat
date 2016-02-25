@@ -65,15 +65,22 @@ handle(St, {join, Channel, Nick}) ->
 % Leave channel
 %
 % NEED TO CHECK THAT NO ONE TRIES TO LEAVE BEFORE JOINED
-handle(St, {leave, Channel, Pid}) ->
+handle(St, {leave, Channel, Nick}) ->
 	Channels = St#server_st.channels,
 	case maps:find(Channel, Channels) of
 		{ok, Members} ->
-			NewMembers = lists:delete(Pid, Members),
-			NewState = St#server_st {channels = maps:put(Channel, NewMembers, Channels)},
-			{reply, ok, NewState};
+			Pid = maps:get(Nick,St#server_st.users),
+			IsMember = lists:member(Pid,Members),
+			if 
+				IsMember ->
+					NewMembers = lists:delete(Pid, Members),
+					NewState = St#server_st {channels = maps:put(Channel, NewMembers, Channels)},
+					{reply, ok, NewState};
+				true ->
+					{reply, {error, user_not_joined, "You're not in the channel"}, St}
+			end;
 		error ->
-			{reply, {error, user_not_joined, "You're not in the channel"}, St}
+			{reply, {error, user_not_joined, "Channel does not exist"}, St}
 	end;
 
 handle(St, {msg_from_client, Channel, Nick, Msg}) ->

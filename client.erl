@@ -32,7 +32,7 @@ handle(St, {connect, Server}) ->
                     {reply, {error, user_already_connected, Msg}, St}
             catch
                 _:_ ->
-                    {reply, {error, server_not_reached, "couldn't connect to server"}, St}
+                    {reply, {error, server_not_reached, "couldn't reach to server"}, St}
             end;
         true -> % probably not needed on client side?
              {reply, {error, user_already_connected, "You're already connected to a server"}, St}
@@ -47,25 +47,22 @@ handle(St, disconnect) ->
             {reply, {error, leave_channels_first, "Leave all the channels!"}, St} ;
         true ->
             Data = {disconnect, St#client_st.nick},
-            ServerAtom = St#client_st.server,
-            try genserver:request(ServerAtom, Data) of
+            try genserver:request(St#client_st.server, Data) of
                 ok ->
                     NewState = St#client_st { server = null },
                     {reply, ok, NewState}
             catch
                 _:_ ->
-                    {reply, {error, server_not_reached, "couldn't connect to server"}, St}
+                    {reply, {error, server_not_reached, "couldn't reach server"}, St}
             end
     end;
 
 % Join channel
 handle(St, {join, Channel}) ->
     ChannelAtom = list_to_atom(Channel),
-    %IsMember = lists:member(ChannelAtom, St#client_st.channels),
     if
         St#client_st.server == null ->
             {reply, {error, user_not_connected, "You're not connected to a server"}, St} ;
-            %{reply, {error, user_already_joined, "You're already in this channel"}, St} ;
         true ->
             Data = {join, ChannelAtom, St#client_st.nick},
             try genserver:request(St#client_st.server, Data) of
@@ -76,7 +73,7 @@ handle(St, {join, Channel}) ->
                     {reply, {error, user_already_joined, [Msg]}, St}
             catch
                 _:_ ->
-                  {reply, {error, server_not_reached, "couldn't connect to server"}, St}
+                  {reply, {error, server_not_reached, "couldn't reach server"}, St}
             end
     end;
 
@@ -87,11 +84,16 @@ handle(St, {leave, Channel}) ->
     if
         IsMember ->
             Data = {leave, ChannelAtom, self()},
-            genserver:request(St#client_st.server, Data),
-            NewState = St#client_st { channels = lists:delete(ChannelAtom, St#client_st.channels) },
-            {reply, ok, NewState};
-        true ->
-            {reply, {error, user_not_joined, "You're not in the channel"}, St}
+            try genserver:request(St#client_st.server, Data) of
+                ok ->
+                    NewState = St#client_st { channels = lists:delete(ChannelAtom, St#client_st.channels) },
+                    {reply, ok, NewState};
+                {error, user_not_joined, Msg} ->
+                    {reply, {error, user_not_joined, Msg}, St}
+            catch
+                _:_ ->
+                    {reply, {error, server_not_reached, "couldn't reach server"}, St}
+            end
     end;
 
 % Sending messages
