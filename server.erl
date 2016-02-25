@@ -19,17 +19,13 @@ initial_state(ServerName) ->
 %% and NewState is the new state of the server.
 handle(St, {connect, Nick, Pid}) ->
 	Is_Member = maps:is_key(Nick, St#server_st.users),
-	%io:fwrite("Server received: ~p~n", Is_member),
 	if
 		Is_Member ->
 			Response = {error, user_already_connected, "Nick occupied by other user"},
 			{reply, Response, St};
 		true ->
             NewSt = St#server_st {users = maps:put(Nick, Pid, St#server_st.users)},
-            io:fwrite("Server is sending: ~p~n", [self()]),
             {reply, {ok, self()}, NewSt}
-        % Atom server_not_reached is returned when 
-        % the server process cannot be reached for any reason.
 	end;
 
 %
@@ -51,16 +47,17 @@ handle(St, {join, Channel, Nick}) ->
 			IsMember = lists:member(maps:get(Nick,St#server_st.users),Members),
 			if 
 				IsMember ->
-					NewMembers = Members,
 					{reply, {error, user_already_joined, "You're already in this channel"}, St};
 				true ->
-					NewMembers = [maps:get(Nick,St#server_st.users)|Members]
+					NewMembers = [maps:get(Nick,St#server_st.users)|Members],
+					NewState = St#server_st {channels = maps:put(Channel, NewMembers, Channels)}, % Perhaps could be done at the same time as below
+					{reply, ok, NewState}
 			end;
 		error ->
-			NewMembers = [maps:get(Nick,St#server_st.users)]
-	end,
-	NewState = St#server_st {channels = maps:put(Channel, NewMembers, Channels)},
-	{reply, ok, NewState};
+			NewMembers = [maps:get(Nick,St#server_st.users)],
+			NewState = St#server_st {channels = maps:put(Channel, NewMembers, Channels)}, % Perhaps could be done at the same time as above.
+			{reply, ok, NewState}
+	end;
 %
 % Leave channel
 %
@@ -70,7 +67,7 @@ handle(St, {leave, Channel, Nick}) ->
 	case maps:find(Channel, Channels) of
 		{ok, Members} ->
 			Pid = maps:get(Nick,St#server_st.users),
-			IsMember = lists:member(Pid,Members),
+			IsMember = lists:member(Pid, Members),
 			if 
 				IsMember ->
 					NewMembers = lists:delete(Pid, Members),
@@ -83,22 +80,31 @@ handle(St, {leave, Channel, Nick}) ->
 			{reply, {error, user_not_joined, "Channel does not exist"}, St}
 	end;
 
+%
+% Send message
+%
+%
 handle(St, {msg_from_client, Channel, Nick, Msg}) ->
-	% Fold of all Pids from channel as St and then send the messages to them
-	Channels = St#server_st.channels,
-	case maps:find(Channel, Channels) of
+	case maps:find(Channel, St#server_st.channels) of
 		{ok, Members} ->
-			Pids = lists:delete(maps:get(Nick, St#server_st.users), Members),	
-			Response = lists:map(fun(P) ->
-							genserver:request(P, {incoming_msg, atom_to_list(Channel), atom_to_list(Nick), Msg})
-						  end, Pids),
-			{reply, ok, St};
+			Pid = maps:get(Nick, St#server_st.users),
+			IsMember = lists:member(Pid, Members),
+			if
+				IsMember ->
+					Pids = lists:delete(Pid, Members),	
+					lists:foreach(fun(P) ->
+									genserver:request(P, {incoming_msg, atom_to_list(Channel), atom_to_list(Nick), Msg})
+						  		  end, Pids),
+					{reply, ok, St};
+				true ->
+					{reply, {error, user_not_joined, "You can't write to this channel"}, St}
+			end;
 		error ->
-			{reply, {error, user_not_joined, " BASJ: You're not in the channel"}, St}
+			{reply, {error, user_not_joined, "Channel does not exist"}, St}
 	end;
 
 handle(St, Request) ->
-	{reply, {error, user_not_joined, "Wierd request to server"}, St}.
+	{reply, {error, user_not_joined, [Request]}, St}.
 
 
 

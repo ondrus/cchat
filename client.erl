@@ -21,15 +21,13 @@ initial_state(Nick, GUIName) ->
 handle(St, {connect, Server}) ->
     if 
         St#client_st.server == null ->
-            %add us to the server!
-            ServerAtom = list_to_atom(Server),
             Data = {connect, St#client_st.nick, self()},
-            try genserver:request(ServerAtom, Data) of
+            try genserver:request(list_to_atom(Server), Data) of
                 {ok, Connection} ->
                     NewSt = St#client_st {server = Connection},
                     {reply, ok, NewSt};
-                {error, user_already_connected, Msg} ->
-                    {reply, {error, user_already_connected, Msg}, St}
+                Response ->
+                    {reply, Response, St}
             catch
                 _:_ ->
                     {reply, {error, server_not_reached, "couldn't reach to server"}, St}
@@ -49,7 +47,7 @@ handle(St, disconnect) ->
             Data = {disconnect, St#client_st.nick},
             try genserver:request(St#client_st.server, Data) of
                 ok ->
-                    NewState = St#client_st { server = null },
+                    NewState = St#client_st {server = null},
                     {reply, ok, NewState}
             catch
                 _:_ ->
@@ -59,18 +57,18 @@ handle(St, disconnect) ->
 
 % Join channel
 handle(St, {join, Channel}) ->
-    ChannelAtom = list_to_atom(Channel),
     if
         St#client_st.server == null ->
             {reply, {error, user_not_connected, "You're not connected to a server"}, St} ;
         true ->
+            ChannelAtom = list_to_atom(Channel),
             Data = {join, ChannelAtom, St#client_st.nick},
             try genserver:request(St#client_st.server, Data) of
                 ok ->
                     NewState = St#client_st {channels = [ChannelAtom|St#client_st.channels]},
                     {reply, ok, NewState};
-                {error, user_already_joined, Msg} ->
-                    {reply, {error, user_already_joined, [Msg]}, St}
+                Response ->
+                    {reply, Response, St}
             catch
                 _:_ ->
                   {reply, {error, server_not_reached, "couldn't reach server"}, St}
@@ -80,34 +78,27 @@ handle(St, {join, Channel}) ->
 %% Leave channel
 handle(St, {leave, Channel}) ->
     ChannelAtom = list_to_atom(Channel),
-    IsMember = lists:member(ChannelAtom, St#client_st.channels),
-    if
-        IsMember ->
-            Data = {leave, ChannelAtom, self()},
-            try genserver:request(St#client_st.server, Data) of
-                ok ->
-                    NewState = St#client_st { channels = lists:delete(ChannelAtom, St#client_st.channels) },
-                    {reply, ok, NewState};
-                {error, user_not_joined, Msg} ->
-                    {reply, {error, user_not_joined, Msg}, St}
-            catch
-                _:_ ->
-                    {reply, {error, server_not_reached, "couldn't reach server"}, St}
-            end
+    Data = {leave, ChannelAtom, St#client_st.nick},
+    try genserver:request(St#client_st.server, Data) of
+        ok ->
+            NewState = St#client_st {channels = lists:delete(ChannelAtom, St#client_st.channels)},
+            {reply, ok, NewState};
+        Response ->
+            {reply, Response, St}
+    catch
+        _:_ ->
+            {reply, {error, server_not_reached, "couldn't reach server"}, St}
     end;
 
 % Sending messages
 handle(St, {msg_from_GUI, Channel, Msg}) ->
-    ChannelAtom = list_to_atom(Channel),
-    IsMember = lists:member(ChannelAtom, St#client_st.channels),
-    if
-        IsMember ->
-            Data = {msg_from_client, ChannelAtom, St#client_st.nick, Msg},
-            Response = genserver:request(St#client_st.server, Data),
-            {reply, Response, St};
-        true ->
-            % Perhaps take care of this on server side
-            {reply, {error, user_not_joined, "client: You're not in the channel"}, St}
+    Data = {msg_from_client, list_to_atom(Channel), St#client_st.nick, Msg},
+    try genserver:request(St#client_st.server, Data) of
+        Response ->
+        {reply, Response, St}
+    catch
+        _:_ ->
+            {reply, {error, server_not_reached, "couldn't reach server"}, St}
     end;
 
 %% Get current nick
