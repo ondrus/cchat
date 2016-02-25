@@ -65,7 +65,8 @@ handle(St, {join, Channel}) ->
         true ->
             Data = {join, ChannelAtom, self()},
             genserver:request(St#client_st.server, Data),
-            NewState = St#client_st {channels = [ChannelAtom|St#client_st.channels]}
+            NewState = St#client_st {channels = [ChannelAtom|St#client_st.channels]},
+            {reply, ok, NewState}
     end;
 
 %% Leave channel
