@@ -6,4 +6,6 @@
 
 % This record defines the structure of the server process.
 % Add whatever other fields you need.
--record(server_st, {name,users,channels}).
+-record(server_st, {name, users, channels}).
+
+-record(channel_st, {name, users}).

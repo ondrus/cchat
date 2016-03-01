@@ -78,7 +78,7 @@ handle(St, {join, Channel}) ->
 %% Leave channel
 handle(St, {leave, Channel}) ->
     ChannelAtom = list_to_atom(Channel),
-    Data = {leave, ChannelAtom, St#client_st.nick},
+    Data = {leave, ChannelAtom, self()},
     try genserver:request(St#client_st.server, Data) of
         ok ->
             NewState = St#client_st {channels = lists:delete(ChannelAtom, St#client_st.channels)},

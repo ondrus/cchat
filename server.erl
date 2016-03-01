@@ -39,43 +39,31 @@ handle(St, {disconnect, Nick}) ->
 %
 % Join channel
 %
-% NEED TO CHECK THAT NO ONE TRIES TO JOIN THE SAME CHANNEL WHILE SOMEONE CREATES IT
+% NEED TO CHECK THAT NO ONE TRIES TO JOIN THE SAME CHANNEL WHILE SOMEONE CREATES IT?
 handle(St, {join, Channel, Nick}) ->
 	Channels = St#server_st.channels,
 	case maps:find(Channel, Channels) of
-		{ok, Members} ->
-			IsMember = lists:member(maps:get(Nick,St#server_st.users),Members),
-			if 
-				IsMember ->
-					{reply, {error, user_already_joined, "You're already in this channel"}, St};
-				true ->
-					NewMembers = [maps:get(Nick,St#server_st.users)|Members],
-					NewState = St#server_st {channels = maps:put(Channel, NewMembers, Channels)}, % Perhaps could be done at the same time as below
-					{reply, ok, NewState}
-			end;
+		{ok, Pid} ->
+			Response = genserver:request(Pid, {join, maps:find(Nick, St#server_st.users)}),
+			{reply, Response, St};
 		error ->
-			NewMembers = [maps:get(Nick,St#server_st.users)],
-			NewState = St#server_st {channels = maps:put(Channel, NewMembers, Channels)}, % Perhaps could be done at the same time as above.
-			{reply, ok, NewState}
+			ChannelPid = genserver:start(Channel, channel:initial_state(Channel), fun channel:handle/2),
+			{ok, UserPid} = maps:find(Nick, St#server_st.users),
+			Response = genserver:request(ChannelPid, {join, UserPid}),
+			NewState = St#server_st {channels = maps:put(Channel, ChannelPid, Channels)}, % Perhaps could be done at the same time as above.
+			{reply, Response, NewState}
 	end;
 %
 % Leave channel
 %
 % NEED TO CHECK THAT NO ONE TRIES TO LEAVE BEFORE JOINED
-handle(St, {leave, Channel, Nick}) ->
+handle(St, {leave, Channel, Pid}) ->
 	Channels = St#server_st.channels,
+	%io:fwrite("Server sent channelPid to Channel: ~p~n", [ChannelPidd]),
 	case maps:find(Channel, Channels) of
-		{ok, Members} ->
-			Pid = maps:get(Nick,St#server_st.users),
-			IsMember = lists:member(Pid, Members),
-			if 
-				IsMember ->
-					NewMembers = lists:delete(Pid, Members),
-					NewState = St#server_st {channels = maps:put(Channel, NewMembers, Channels)},
-					{reply, ok, NewState};
-				true ->
-					{reply, {error, user_not_joined, "You're not in the channel"}, St}
-			end;
+		{ok, ChannelPid} ->
+			Response = genserver:request(ChannelPid, {leave, Pid}),
+			{reply, Response, St};
 		error ->
 			{reply, {error, user_not_joined, "Channel does not exist"}, St}
 	end;
@@ -86,21 +74,13 @@ handle(St, {leave, Channel, Nick}) ->
 %
 handle(St, {msg_from_client, Channel, Nick, Msg}) ->
 	case maps:find(Channel, St#server_st.channels) of
-		{ok, Members} ->
-			Pid = maps:get(Nick, St#server_st.users),
-			IsMember = lists:member(Pid, Members),
-			if
-				IsMember ->
-					Pids = lists:delete(Pid, Members),	
-					lists:foreach(fun(P) ->
-									genserver:request(P, {incoming_msg, atom_to_list(Channel), atom_to_list(Nick), Msg})
-						  		  end, Pids),
-					{reply, ok, St};
-				true ->
-					{reply, {error, user_not_joined, "You can't write to this channel"}, St}
-			end;
+		{ok, ChannelPid} ->
+			{ok, UserPid} = maps:find(Nick, St#server_st.users),
+			Response = genserver:request(ChannelPid, {msg_from_client, UserPid, Nick, Msg}),
+			{reply, Response, St};
 		error ->
 			{reply, {error, user_not_joined, "Channel does not exist"}, St}
+			
 	end;
 
 handle(St, Request) ->
