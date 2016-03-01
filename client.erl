@@ -62,7 +62,7 @@ handle(St, {join, Channel}) ->
             {reply, {error, user_not_connected, "You're not connected to a server"}, St} ;
         true ->
             ChannelAtom = list_to_atom(Channel),
-            Data = {join, ChannelAtom, St#client_st.nick},
+            Data = {join, ChannelAtom, self()},
             try genserver:request(St#client_st.server, Data) of
                 ok ->
                     NewState = St#client_st {channels = [ChannelAtom|St#client_st.channels]},

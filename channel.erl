@@ -16,11 +16,13 @@
 initial_state(ChannelName) ->
     #channel_st{name = ChannelName, users = []}.
 
+%%
 %% handle/2 handles requests from server
 %% All requests are processed by handle/2 receiving the request data (and the
 %% current state), performing the needed actions, and returning a tuple
 %% {reply, Reply, NewState}, where Reply is the reply to be sent to the server
 %% and NewState is the new state of the channel.
+%%
 
 %
 % Join channel
