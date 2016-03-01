@@ -42,13 +42,13 @@ handle(St, {disconnect, Nick}) ->
 % NEED TO CHECK THAT NO ONE TRIES TO JOIN THE SAME CHANNEL WHILE SOMEONE CREATES IT?
 handle(St, {join, Channel, Nick}) ->
 	Channels = St#server_st.channels,
+	{ok, UserPid} = maps:find(Nick, St#server_st.users),
 	case maps:find(Channel, Channels) of
 		{ok, Pid} ->
-			Response = genserver:request(Pid, {join, maps:find(Nick, St#server_st.users)}),
+			Response = genserver:request(Pid, {join, UserPid}),
 			{reply, Response, St};
 		error ->
 			ChannelPid = genserver:start(Channel, channel:initial_state(Channel), fun channel:handle/2),
-			{ok, UserPid} = maps:find(Nick, St#server_st.users),
 			Response = genserver:request(ChannelPid, {join, UserPid}),
 			NewState = St#server_st {channels = maps:put(Channel, ChannelPid, Channels)}, % Perhaps could be done at the same time as above.
 			{reply, Response, NewState}

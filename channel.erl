@@ -19,7 +19,6 @@ initial_state(ChannelName) ->
 %
 % Join channel
 %
-% NEED TO CHECK THAT NO ONE TRIES TO JOIN THE SAME CHANNEL WHILE SOMEONE CREATES IT?
 handle(St, {join, Pid}) ->
 	Users = St#channel_st.users,
 	IsMember = lists:member(Pid, Users),
@@ -27,13 +26,12 @@ handle(St, {join, Pid}) ->
 		IsMember ->
 			{reply, {error, user_already_joined, "You're already in this channel"}, St};
 		true ->
-			NewState = St#channel_st {users = [Pid|St#channel_st.users]}, % Perhaps could be done at the same time as below
+			NewState = St#channel_st {users = [Pid|Users]}, % Perhaps could be done at the same time as below
 			{reply, ok, NewState}
 	end;
 %
 % Leave channel
 %
-% NEED TO CHECK THAT NO ONE TRIES TO LEAVE BEFORE JOINED
 handle(St, {leave, Pid}) ->
 	Users = St#channel_st.users,
 	IsMember = lists:member(Pid, Users),
@@ -53,11 +51,16 @@ handle(St, {msg_from_client, Pid, Nick, Msg}) ->
 	IsMember = lists:member(Pid, St#channel_st.users),
 	if
 		IsMember ->
-			{reply, ok, St},
 			Pids = lists:delete(Pid, St#channel_st.users),
-			lists:foreach(fun(P) ->
+			spawn(
+				fun() ->
+					lists:foreach(
+						(fun(P) ->
 							genserver:request(P, {incoming_msg, atom_to_list(St#channel_st.name), atom_to_list(Nick), Msg})
-				  		  end, Pids);
+				  		end), 
+				  	Pids)
+			end),
+			{reply, ok, St};
 		true ->
 			{reply, {error, user_not_joined, "You can't write to this channel"}, St}
 	end;
