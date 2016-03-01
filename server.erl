@@ -56,13 +56,13 @@ handle(St, {disconnect, Nick}) ->
 handle(St, {join, Channel, Pid}) ->
 	case maps:find(Channel, St#server_st.channels) of
 		{ok, ChannelPid} ->
-			Response = genserver:request(ChannelPid, {join, Pid}),
-			{reply, Response, St};
-		error -> % If the channel does not exist, create a new channel and add the user to it
+			Reply = genserver:request(ChannelPid, {join, Pid}),
+			{reply, Reply, St};
+		error ->
 			ChannelPid = genserver:start(Channel, channel:initial_state(Channel), fun channel:handle/2),
-			Response = genserver:request(ChannelPid, {join, Pid}),
+			Reply = genserver:request(ChannelPid, {join, Pid}),
 			NewState = St#server_st {channels = maps:put(Channel, ChannelPid, St#server_st.channels)},
-			{reply, Response, NewState}
+			{reply, Reply, NewState}
 	end;
 %
 % Leave channel
@@ -72,8 +72,8 @@ handle(St, {join, Channel, Pid}) ->
 handle(St, {leave, Channel, Pid}) ->
 	case maps:find(Channel, St#server_st.channels) of
 		{ok, ChannelPid} ->
-			Response = genserver:request(ChannelPid, {leave, Pid}),
-			{reply, Response, St};
+			Reply = genserver:request(ChannelPid, {leave, Pid}),
+			{reply, Reply, St};
 		error ->
 			{reply, getError(user_not_joined), St}
 	end;
@@ -87,8 +87,8 @@ handle(St, {msg_from_client, Channel, Nick, Msg}) ->
 	case maps:find(Channel, St#server_st.channels) of
 		{ok, ChannelPid} ->
 			{ok, UserPid} = maps:find(Nick, St#server_st.users),
-			Response = genserver:request(ChannelPid, {msg_from_client, UserPid, Nick, Msg}),
-			{reply, Response, St};
+			Reply = genserver:request(ChannelPid, {msg_from_client, UserPid, Nick, Msg}),
+			{reply, Reply, St};
 		error ->
 			{reply, getError(user_not_joined), St}
 	end;
