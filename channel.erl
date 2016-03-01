@@ -24,6 +24,8 @@ initial_state(ChannelName) ->
 
 %
 % Join channel
+% If the user is not in the channel, adds the user
+% If the user is in the channels returns error user_already_joined.
 %
 handle(St, {join, Pid}) ->
 	Member = isMember(St, Pid),
@@ -37,6 +39,8 @@ handle(St, {join, Pid}) ->
 
 %
 % Leave channel
+% If the user is in the channel, removes the user
+% If the user is not in the channels returns error user_not_joined.
 %
 handle(St, {leave, Pid}) ->
 	Member = isMember(St, Pid),
@@ -50,13 +54,16 @@ handle(St, {leave, Pid}) ->
 
 %
 % Send message
+% Sends the message to all users connected to the current channel process
+% (except the sending user).
+% If the sending user is not in the channel, returns error user_not_joined.
 %
 handle(St, {msg_from_client, Pid, Nick, Msg}) ->
 	Member = isMember(St, Pid),
 	if
 		Member ->
 			Pids = lists:delete(Pid, St#channel_st.users),
-			spawn(
+			spawn( % create a separate process for the message sending
 				fun() ->
 					lists:foreach(
 						(fun(P) ->
@@ -70,9 +77,15 @@ handle(St, {msg_from_client, Pid, Nick, Msg}) ->
 			{reply, getError(user_not_joined), St}
 	end;
 
+%
+% Handles unknown requests
+%
 handle(St, _) ->
 	{reply, getError(unknown_request), St}.
 
+%
+% Returns the error tuple of each error atom
+%
 getError(Error) ->
 	case Error of
 		user_already_joined -> 
@@ -83,6 +96,10 @@ getError(Error) ->
 			{error, unknown_request, "Something went really wrong"}
 	end.
 
+%
+% Checks if the user is a member of this channel.
+% Returns true if the user is a member of this channel process.
+%
 isMember(St, User) -> 
 	lists:member(User, St#channel_st.users).
 
