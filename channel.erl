@@ -65,15 +65,8 @@ handle(St, {msg_from_client, Pid, Nick, Msg}) ->
 	if
 		Member ->
 			Pids = lists:delete(Pid, St#channel_st.users),
-			spawn( % create a separate process for the message sending
-				fun() ->
-					lists:foreach(
-						(fun(P) ->
-							genserver:request(P, 
-								{incoming_msg, atom_to_list(St#channel_st.name), atom_to_list(Nick), Msg})
-				  		end), 
-				  	Pids)
-			end),
+			Data = {incoming_msg, atom_to_list(St#channel_st.name), atom_to_list(Nick), Msg},
+			[spawn(fun() -> genserver:request(P, Data) end) || P <- Pids],
 			{reply, ok, St};
 		true ->
 			{reply, getError(user_not_joined), St}
