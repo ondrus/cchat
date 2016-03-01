@@ -1,62 +1,67 @@
+%%%%%%%%%%%%%%%% 
+%% Made by Josefin Ondrus and Emma Gustafsson TDA383, 2016
+%%
+%% Channel module handling requests from the server module. 
+%% Includes functionality of clients joining and leaving channels as well as 
+%% sending messages to all clients connected to its own channel process.
+%%%%%%%%%%%%%%%%
+
 -module(channel).
 -export([handle/2, initial_state/1]).
 -include_lib("./defs.hrl").
 
-%% inititial_state/2 and handle/2 are used togetger with the genserver module,
-%% explained in the lecture about Generic server.
-
-% Produce initial state
+%
+% Produce initial state 
+%
 initial_state(ChannelName) ->
-    #channel_st{ name = ChannelName, users = []}.
+    #channel_st{name = ChannelName, users = []}.
 
 %% handle/2 handles requests from server
-
 %% All requests are processed by handle/2 receiving the request data (and the
 %% current state), performing the needed actions, and returning a tuple
 %% {reply, Reply, NewState}, where Reply is the reply to be sent to the server
-%% and NewState is the new state of the server.
+%% and NewState is the new state of the channel.
 
 %
 % Join channel
 %
 handle(St, {join, Pid}) ->
-	Users = St#channel_st.users,
-	IsMember = lists:member(Pid, Users),
+	Member = isMember(St, Pid),
 	if 
-		IsMember ->
+		Member ->
 			{reply, {error, user_already_joined, "You're already in this channel"}, St};
 		true ->
-			NewState = St#channel_st {users = [Pid|Users]}, % Perhaps could be done at the same time as below
+			NewState = St#channel_st {users = [Pid|St#channel_st.users]},
 			{reply, ok, NewState}
 	end;
+
 %
 % Leave channel
 %
 handle(St, {leave, Pid}) ->
-	Users = St#channel_st.users,
-	IsMember = lists:member(Pid, Users),
+	Member = isMember(St, Pid),
 	if
-		IsMember ->
-			NewState = St#channel_st {users = lists:delete(Pid,Users)}, % Perhaps could be done at the same time as below
+		Member ->
+			NewState = St#channel_st {users = lists:delete(Pid,St#channel_st.users)},
 			{reply, ok, NewState};
 		true ->
-			{reply, {error, user_not_joined, "You're not in this channel bajs"}, St}		
+			{reply, {error, user_not_joined, "You're not in this channel"}, St}		
 	end;
 
 %
 % Send message
 %
-%
 handle(St, {msg_from_client, Pid, Nick, Msg}) ->
-	IsMember = lists:member(Pid, St#channel_st.users),
+	Member = isMember(St, Pid),
 	if
-		IsMember ->
+		Member ->
 			Pids = lists:delete(Pid, St#channel_st.users),
 			spawn(
 				fun() ->
 					lists:foreach(
 						(fun(P) ->
-							genserver:request(P, {incoming_msg, atom_to_list(St#channel_st.name), atom_to_list(Nick), Msg})
+							genserver:request(P, 
+								{incoming_msg, atom_to_list(St#channel_st.name), atom_to_list(Nick), Msg})
 				  		end), 
 				  	Pids)
 			end),
@@ -64,7 +69,12 @@ handle(St, {msg_from_client, Pid, Nick, Msg}) ->
 		true ->
 			{reply, {error, user_not_joined, "You can't write to this channel"}, St}
 	end;
-		
 
-handle(St, Request) ->
-	{reply, {error, user_not_joined, [Request]}, St}.
+handle(St, _) ->
+	{reply, {error, unknown_request, "Something went really wrong"}, St}.
+
+isMember(St, User) -> 
+	lists:member(User, St#channel_st.users).
+
+
+

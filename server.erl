@@ -7,7 +7,7 @@
 
 % Produce initial state
 initial_state(ServerName) ->
-    #server_st{ name = ServerName, users = maps:new(), channels = maps:new()}.
+    #server_st{name = ServerName, users = maps:new(), channels = maps:new()}.
 
 %% ---------------------------------------------------------------------------
 
