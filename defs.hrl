@@ -1,3 +1,9 @@
+%%%%%%%%%%%%%%%% 
+%% Made by Josefin Ondrus and Emma Gustafsson group 17 in TDA383, 2016
+%% 
+%% Definitions of the different processes of CCHAT.
+%%%%%%%%%%%%%%%% 
+
 % This record defines the structure of the client process.
 % It contains the following fields:
 %	- nick: the nickname of the client (not the Pid).

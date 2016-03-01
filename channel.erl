@@ -1,5 +1,5 @@
 %%%%%%%%%%%%%%%% 
-%% Made by Josefin Ondrus and Emma Gustafsson TDA383, 2016
+%% Made by Josefin Ondrus and Emma Gustafsson group 17 in TDA383, 2016
 %%
 %% Channel module handling requests from the server module. 
 %% Includes functionality of clients joining and leaving channels as well as 
@@ -29,7 +29,7 @@ handle(St, {join, Pid}) ->
 	Member = isMember(St, Pid),
 	if 
 		Member ->
-			{reply, {error, user_already_joined, "You're already in this channel"}, St};
+			{reply, getError(user_already_joined), St};
 		true ->
 			NewState = St#channel_st {users = [Pid|St#channel_st.users]},
 			{reply, ok, NewState}
@@ -45,7 +45,7 @@ handle(St, {leave, Pid}) ->
 			NewState = St#channel_st {users = lists:delete(Pid,St#channel_st.users)},
 			{reply, ok, NewState};
 		true ->
-			{reply, {error, user_not_joined, "You're not in this channel"}, St}		
+			{reply, getError(user_not_joined), St}		
 	end;
 
 %
@@ -67,11 +67,21 @@ handle(St, {msg_from_client, Pid, Nick, Msg}) ->
 			end),
 			{reply, ok, St};
 		true ->
-			{reply, {error, user_not_joined, "You can't write to this channel"}, St}
+			{reply, getError(user_not_joined), St}
 	end;
 
 handle(St, _) ->
-	{reply, {error, unknown_request, "Something went really wrong"}, St}.
+	{reply, getError(unknown_request), St}.
+
+getError(Error) ->
+	case Error of
+		user_already_joined -> 
+			{error, user_already_joined, "You're already in this channel"};
+		user_not_joined -> 
+			{error, user_not_joined, "You're not in this channel"};
+		unknown_request ->
+			{error, unknown_request, "Something went really wrong"}
+	end.
 
 isMember(St, User) -> 
 	lists:member(User, St#channel_st.users).
