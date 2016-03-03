@@ -30,14 +30,14 @@ initial_state(ChannelName) ->
 % If the user is in the channels returns error user_already_joined.
 %
 handle(St, {join, Pid}) ->
-	Member = isMember(St, Pid),
-	if 
-		Member ->
-			{reply, getError(user_already_joined), St};
-		true ->
-			NewState = St#channel_st {users = [Pid|St#channel_st.users]},
-			{reply, ok, NewState}
-	end;
+    Member = isMember(St, Pid),
+    if 
+        Member ->
+            {reply, getError(user_already_joined), St};
+        true ->
+            NewState = St#channel_st {users = [Pid|St#channel_st.users]},
+            {reply, {ok,self()}, NewState}
+    end;
 
 %
 % Leave channel
@@ -45,14 +45,14 @@ handle(St, {join, Pid}) ->
 % If the user is not in the channels returns error user_not_joined.
 %
 handle(St, {leave, Pid}) ->
-	Member = isMember(St, Pid),
-	if
-		Member ->
-			NewState = St#channel_st {users = lists:delete(Pid,St#channel_st.users)},
-			{reply, ok, NewState};
-		true ->
-			{reply, getError(user_not_joined), St}		
-	end;
+    Member = isMember(St, Pid),
+    if
+        Member ->
+            NewState = St#channel_st {users = lists:delete(Pid,St#channel_st.users)},
+            {reply, ok, NewState};
+        true ->
+            {reply, getError(user_not_joined), St}      
+    end;
 
 %
 % Send message
@@ -61,42 +61,40 @@ handle(St, {leave, Pid}) ->
 % If the sending user is not in the channel, returns error user_not_joined.
 %
 handle(St, {msg_from_client, Pid, Nick, Msg}) ->
-	Member = isMember(St, Pid),
-	if
-		Member ->
-			Pids = lists:delete(Pid, St#channel_st.users),
-			Data = {incoming_msg, atom_to_list(St#channel_st.name), atom_to_list(Nick), Msg},
-			[spawn(fun() -> genserver:request(P, Data) end) || P <- Pids],
-			{reply, ok, St};
-		true ->
-			{reply, getError(user_not_joined), St}
-	end;
+    Member = isMember(St, Pid),
+    if
+        Member ->
+            Pids = lists:delete(Pid, St#channel_st.users),
+            Data = {incoming_msg, atom_to_list(St#channel_st.name), atom_to_list(Nick), Msg},
+            [spawn(fun() -> genserver:request(P, Data) end) || P <- Pids],
+            {reply, ok, St};
+        true ->
+            {reply, getError(user_not_joined), St}
+    end;
 
 %
 % Handles unknown requests
 %
 handle(St, _) ->
-	{reply, getError(unknown_request), St}.
+    {reply, getError(unknown_request), St}.
 
 %
 % Returns the error tuple of each error atom
 %
 getError(Error) ->
-	case Error of
-		user_already_joined -> 
-			{error, user_already_joined, "You're already in this channel"};
-		user_not_joined -> 
-			{error, user_not_joined, "You're not in this channel"};
-		unknown_request ->
-			{error, unknown_request, "Something went really wrong"}
-	end.
+    case Error of
+        user_already_joined -> 
+            {error, user_already_joined, "You're already in this channel"};
+        user_not_joined -> 
+            {error, user_not_joined, "You're not in this channel"};
+        unknown_request ->
+            {error, unknown_request, "Something went really wrong"}
+    end.
 
 %
 % Checks if the user is a member of this channel.
 % Returns true if the user is a member of this channel process.
 %
 isMember(St, User) -> 
-	lists:member(User, St#channel_st.users).
-
-
+    lists:member(User, St#channel_st.users).
 

@@ -78,20 +78,6 @@ handle(St, {leave, Channel, Pid}) ->
 			{reply, getError(user_not_joined), St}
 	end;
 
-%
-% Send message
-% If the channel exists, requests the channel process to send the message.
-% If the channel does not exist, returns error user_not_joined.
-%
-handle(St, {msg_from_client, Channel, Nick, Msg}) ->
-	case maps:find(Channel, St#server_st.channels) of
-		{ok, ChannelPid} ->
-			{ok, UserPid} = maps:find(Nick, St#server_st.users),
-			Reply = genserver:request(ChannelPid, {msg_from_client, UserPid, Nick, Msg}),
-			{reply, Reply, St};
-		error ->
-			{reply, getError(user_not_joined), St}
-	end;
 
 %
 % Handles unknown requests
@@ -111,9 +97,3 @@ getError(Error) ->
 		unknown_request ->
 			{error, unknown_request, "Something went really wrong"}
 	end.
-
-
-
-
-
-
