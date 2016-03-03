@@ -34,7 +34,7 @@ handle(St, {connect, Nick, Pid}) ->
 	Member = maps:is_key(Nick, St#server_st.users),
 	if
 		Member ->
-			{reply, getError(user_already_connected), St};
+			{reply, getError(nick_taken), St};
 		true ->
             NewSt = St#server_st {users = maps:put(Nick, Pid, St#server_st.users)},
             {reply, {ok, self()}, NewSt}
@@ -78,6 +78,12 @@ handle(St, {leave, Channel, Pid}) ->
 			{reply, getError(user_not_joined), St}
 	end;
 
+handle(St, {delegate_work, Func, List}) ->
+	Users = maps:values(St#server_st.users),
+	Tasks = assign_tasks(Users, List),
+	Answer = [genserver:request(Pid, {work, Func, Item}) || {Pid, Item} <- Tasks],
+	{reply, {ok, Answer}, St};
+
 
 %
 % Handles unknown requests
@@ -85,15 +91,29 @@ handle(St, {leave, Channel, Pid}) ->
 handle(St, _) ->
 	{reply, getError(unknown_request), St}.
 
+
+%
+% Assigns tasks to the clients connected to the server
+%
+assign_tasks([], _) -> [] ;
+assign_tasks(Users, Tasks) ->
+  [  {lists:nth(((N-1) rem length(Users)) + 1, Users), Task} || {N,Task} <- lists:zip(lists:seq(1,length(Tasks)), Tasks) ].
+
+
 %
 % Returns the error tuple of each error atom
 %
 getError(Error) ->
 	case Error of
-		user_already_connected ->
-			{error, user_already_connected, "Nick occupied by other user"};
+		nick_taken ->
+			{error, nick_taken, "Nick occupied by other user"};
 		user_not_joined ->
 			{error, user_not_joined, "Channel does not exist"};
 		unknown_request ->
 			{error, unknown_request, "Something went really wrong"}
 	end.
+
+
+
+
+

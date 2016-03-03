@@ -154,6 +154,9 @@ handle(St = #client_st { gui = GUIName }, {incoming_msg, Channel, Name, Msg}) ->
     gen_server:call(list_to_atom(GUIName), {msg_to_GUI, Channel, Name++"> "++Msg}),
     {reply, ok, St};
 
+handle(St, {work, Func, Val}) ->
+    {reply, Func(Val), St};
+
 %
 % Handles unknown requests
 %
