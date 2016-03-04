@@ -155,7 +155,7 @@ handle(St = #client_st { gui = GUIName }, {incoming_msg, Channel, Name, Msg}) ->
     {reply, ok, St};
 
 handle(St, {work, Func, Val}) ->
-    {reply, Func(Val), St};
+    {reply, {ok, Func(Val)}, St};
 
 %
 % Handles unknown requests

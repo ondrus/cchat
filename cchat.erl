@@ -25,9 +25,11 @@ start2() ->
 
 send_job(Server, Func, List) ->
 	Data = {delegate_work, Func, List},
-	try genserver:request(list_to_atom(Server), Data) of
-		{ok, List} -> 
-			io:fwrite("Answer: ~p~n", [List])
+	try genserver:request(list_to_atom(Server), Data, infinity) of
+		{ok,Result} -> 
+			Result;
+		{error, _, Msg} ->
+			io:fwrite("Error: ~p~n", [Msg])
 	catch
 		_:_ ->
 			io:fwrite("Server not reached! ~p~n", [Server])

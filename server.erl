@@ -81,9 +81,19 @@ handle(St, {leave, Channel, Pid}) ->
 handle(St, {delegate_work, Func, List}) ->
 	Users = maps:values(St#server_st.users),
 	Tasks = assign_tasks(Users, List),
-	Answer = [genserver:request(Pid, {work, Func, Item}) || {Pid, Item} <- Tasks],
-	{reply, {ok, Answer}, St};
-
+	if
+		length(Users) == 0 ->
+			{reply, {error, delegation_failed, "No clients available."}, St};
+		true ->
+			Reply = [genserver:request(Pid, {work, Func, Item}, 5000) || {Pid, Item} <- Tasks],
+			if
+				length(Reply) == length(List) ->
+					Answer = [Val||{ok, Val} <- Reply],
+					{reply, {ok, Answer}, St};
+				true ->
+					{reply, {error, delegation_failed, "All clients did not answer."}, St}
+			end
+	end;
 
 %
 % Handles unknown requests
