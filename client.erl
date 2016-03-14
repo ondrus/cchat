@@ -154,6 +154,10 @@ handle(St = #client_st { gui = GUIName }, {incoming_msg, Channel, Name, Msg}) ->
     gen_server:call(list_to_atom(GUIName), {msg_to_GUI, Channel, Name++"> "++Msg}),
     {reply, ok, St};
 
+%
+% Uses the function paramater to compute the given value
+% and replies to the server with the computed value
+%
 handle(St, {work, Func, Val}) ->
     {reply, {ok, Func(Val)}, St};
 

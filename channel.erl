@@ -98,3 +98,4 @@ getError(Error) ->
 isMember(St, User) -> 
     lists:member(User, St#channel_st.users).
 
+

@@ -78,21 +78,23 @@ handle(St, {leave, Channel, Pid}) ->
 			{reply, getError(user_not_joined), St}
 	end;
 
-handle(St, {delegate_work, Func, List}) ->
+
+%
+% Delegate work to channels
+% Uses the assign_tasks function to spread the work over several clients.
+% The computation of the function parameter will be done in each client.
+% If there is no clients connected to the server the delegation will fail and report
+% that no clients are available.
+% If some clients for some reason fail to respond, the delegation will have failed as well
+% and report that all clients did not answer. 
+%
+handle(St, get_workers) ->
 	Users = maps:values(St#server_st.users),
-	Tasks = assign_tasks(Users, List),
 	if
 		length(Users) == 0 ->
-			{reply, {error, delegation_failed, "No clients available."}, St};
+			{reply, getError(no_clients), St};
 		true ->
-			Reply = [genserver:request(Pid, {work, Func, Item}, 5000) || {Pid, Item} <- Tasks],
-			if
-				length(Reply) == length(List) ->
-					Answer = [Val||{ok, Val} <- Reply],
-					{reply, {ok, Answer}, St};
-				true ->
-					{reply, {error, delegation_failed, "All clients did not answer."}, St}
-			end
+			{reply, {ok, Users}, St}
 	end;
 
 %
@@ -101,13 +103,12 @@ handle(St, {delegate_work, Func, List}) ->
 handle(St, _) ->
 	{reply, getError(unknown_request), St}.
 
-
 %
 % Assigns tasks to the clients connected to the server
 %
-assign_tasks([], _) -> [] ;
-assign_tasks(Users, Tasks) ->
-  [  {lists:nth(((N-1) rem length(Users)) + 1, Users), Task} || {N,Task} <- lists:zip(lists:seq(1,length(Tasks)), Tasks) ].
+% assign_tasks([], _) -> [] ;
+% assign_tasks(Users, Tasks) ->
+%   [  {lists:nth(((N-1) rem length(Users)) + 1, Users), Task} || {N,Task} <- lists:zip(lists:seq(1,length(Tasks)), Tasks) ].
 
 
 %
@@ -115,6 +116,10 @@ assign_tasks(Users, Tasks) ->
 %
 getError(Error) ->
 	case Error of
+		delegation_failed ->
+			{error, delegation_failed, "All clients did not answer."};
+		no_clients ->
+			{error, no_clients, "No clients available."};
 		nick_taken ->
 			{error, nick_taken, "Nick occupied by other user"};
 		user_not_joined ->
@@ -122,8 +127,3 @@ getError(Error) ->
 		unknown_request ->
 			{error, unknown_request, "Something went really wrong"}
 	end.
-
-
-
-
-
